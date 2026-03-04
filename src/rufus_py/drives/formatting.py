@@ -5,6 +5,10 @@ from rufus_py.drives import states
 from rufus_py.drives import find_usb as fu
 #######
 
+mount_dict = fu.find_usb()  # GETS THE FIRST KEY FOR NOW
+mount = next(iter(mount_dict))  # IMPORT THE INITIAL MOUNT POINT
+drive = fu.find_DN() # IMPORTS DRIVE NODE
+
 def pkexecNotFound():
     print("Error: The command pkexec or labeling software was not found on your system.")
 def FormatFail():
@@ -16,97 +20,129 @@ def unexpected():
     # 1 -> FAT32 
     # 2 -> exFAT
     # 3 -> ext4
-### DISK FORMATTING ###
-def volumecustomlabel():
-    mount_dict = fu.find_usb()  # GETS THE FIRST KEY FOR NOW
-    mount = next(iter(mount_dict))  # IMPORT THE INITIAL MOUNT POINT
-    drive = fu.find_DN() # IMPORTS DRIVE NODE
-    # THIS FUNCTION MUST BE USED AFTER(?) THE DISK IS FORMATTED
-    # 1. detect the file type
-    type = states.currentFS
-    # 2. unmount the drive
+
+# UNMOUNT FUNCTION
+def unmount():
     try:
         subprocess.run(["pkexec", "umount", drive], check=True)
     except FileNotFoundError:
         pkexecNotFound()
     except subprocess.CalledProcessError:
         FormatFail()
-    except Exception:
-        unexpected()    
-    # 3. change the label using the command specific for that file type
-    if type==0:
-        try:
-            subprocess.run(["pkexec", "ntfslabel", drive, newlabel], check=True)
-        except FileNotFoundError:
-            pkexecNotFound()
-        except subprocess.CalledProcessError:
-            FormatFail()
-        except Exception:
-            unexpected()
-    elif type==1:
-        try:
-            subprocess.run(["pkexec", "fatlabel", drive, newlabel], check=True)
-        except FileNotFoundError:
-            pkexecNotFound()
-        except subprocess.CalledProcessError:
-            FormatFail()
-        except Exception:
-            unexpected()
-    elif type==2:
-        try:
-            subprocess.run(["pkexec", "fatlabel", drive, newlabel], check=True)
-        except FileNotFoundError:
-            pkexecNotFound()
-        except subprocess.CalledProcessError:
-            FormatFail()
-        except Exception:
-            unexpected()
-    elif type==3:
-        try:
-            subprocess.run(["pkexec", "e2label", drive, newlabel], check=True)
-        except FileNotFoundError:
-            pkexecNotFound()
-        except subprocess.CalledProcessError:
-            FormatFail()
-        except Exception:
-            unexpected()
-    else:
-        unexpected()
-    # 4. mount the drive again
+    except Exception as e:
+        print(f"(UMNTFUNC) DEBUG: Unexpected error type: {type(e).__name__}")
+        print(f"DEBUG: Error message: {e}")
+        unexpected() 
+# MOUNT FUNCTION
+def remount():
     try:
         subprocess.run(["pkexec", "mount", drive, mount], check=True)
     except FileNotFoundError:
         pkexecNotFound()
     except subprocess.CalledProcessError:
         FormatFail()
-    except Exception:
-        unexpected()    
+    except Exception as e:
+        print(f"(MNTFUNC) DEBUG: Unexpected error type: {type(e).__name__}")
+        print(f"DEBUG: Error message: {e}")
+        unexpected() 
+
+### DISK FORMATTING ###
+def volumecustomlabel():
+    newlabel = states.new_label
+    # THIS FUNCTION MUST BE USED AFTER(?) THE DISK IS FORMATTED
+    # 1. detect the file type
+    fs_type = states.currentFS
+    # 2. unmount the drive
+    # 3. change the label using the command specific for that file type
+    if fs_type==0:
+        try:
+            subprocess.run(["pkexec", "ntfslabel", drive, newlabel], check=True)
+        except FileNotFoundError:
+            pkexecNotFound()
+        except subprocess.CalledProcessError:
+            FormatFail()
+        except Exception as e:
+            print(f"2. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
+            unexpected()
+    elif fs_type==1:
+        try:
+            subprocess.run(["pkexec", "fatlabel", drive, newlabel], check=True)
+        except FileNotFoundError:
+            pkexecNotFound()
+        except subprocess.CalledProcessError:
+            FormatFail()
+        except Exception as e:
+            print(f"3. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
+            unexpected()
+    elif fs_type==2:
+        try:
+            subprocess.run(["pkexec", "fatlabel", drive, newlabel], check=True)
+        except FileNotFoundError:
+            pkexecNotFound()
+        except subprocess.CalledProcessError:
+            FormatFail()
+        except Exception as e:
+            print(f"4. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
+            unexpected()
+    elif fs_type==3:
+        try:
+            subprocess.run(["pkexec", "e2label", drive, newlabel], check=True)
+        except FileNotFoundError:
+            pkexecNotFound()
+        except subprocess.CalledProcessError:
+            FormatFail()
+        except Exception as e:
+            print(f"5. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
+            unexpected()
+    else:
+        unexpected()
+    # 4. mount the drive again
+   
 
 def cluster():
-    mount_dict = fu.find_usb()  # GETS THE FIRST KEY FOR NOW
+    if not mount_dict:
+        print("Error: No USB mount found. Is the drive plugged in and mounted?")
+        return None, None, None
     mount = next(iter(mount_dict))  # IMPORT THE INITIAL MOUNT POINT
     drive = fu.find_DN() # IMPORTS DRIVE NODE
-    # for logical block size
+    # for physical sector or logical block size
     # NEEDS TROUBLESHOOTING AND ERROR HANDLLING
     try:
-        cluster1 = subprocess.run(["pkexec", "blockdev", "--getbsz", drive], capture_output=True, text=True, check=True)
+        # res1 = subprocess.run(["pkexec", "blockdev", "--getbsz", drive], capture_output=True, text=True, check=True)
+        # cluster1 = int(res1.stdout.strip())
+        if states.cluster_size == 0:
+            cluster1 = 4096
+        elif states.cluster_size == 1:
+            cluster1 = 8192
+        else:
+            print("wtf is the cluster size bro?")
     except FileNotFoundError:
         pkexecNotFound()
     except subprocess.CalledProcessError:
         FormatFail()
-    except Exception:
+    except Exception as e:
+        print(f"7. DEBUG: Unexpected error type: {type(e).__name__}")
+        print(f"DEBUG: Error message: {e}")
         unexpected()  
-    # for physical sectors
+    # for logical sector size
     try:
-        cluster2 = subprocess.run(["pkexec", "blockdev", "--getbss", drive], capture_output=True, text=True, check=True)
+        # res2 = subprocess.run(["pkexec", "blockdev", "--getss", drive], capture_output=True, text=True, check=True)
+        # cluster2 = int(res2.stdout.strip())
+        cluster2 = 512
     except FileNotFoundError:
         pkexecNotFound()
     except subprocess.CalledProcessError:
         FormatFail()
-    except Exception:
+    except Exception as e:
+        print(f"8. DEBUG: Unexpected error type: {type(e).__name__}")
+        print(f"DEBUG: Error message: {e}")
         unexpected()  
     # convert to sectors
-    sector = cluster1/cluster2
+    sector = cluster1//cluster2
     return cluster1, cluster2, sector
     
 
@@ -126,56 +162,64 @@ def checkdevicebadblock():
     pass
 
 def dskformat():
-    cluster1, cluster2, sector = cluster() 
-    mount_dict = fu.find_usb()  # GETS THE FIRST KEY FOR NOW
-    mount = next(iter(mount_dict))  # IMPORT THE INITIAL MOUNT POINT
-    drive = fu.find_DN() # IMPORTS DRIVE NODE
-    type = states.currentFS
+    cluster1, cluster2, sector = cluster()
+    fs_type = states.currentFS
     #These can later be turned to a notification or error box using pyqt
     #THIS WILL ASK FOR PASSWORD NEED TO FETCH PASSWORD so we are using pkexec from polkit to prompt the user for a password. need to figure out a way to use another method or implement this everywhere.
     # instead of FileNotFoundError we can also use shutil(?)
     clusters = cluster1
     sectors = sector
+    # UNMOUNT THE DRIVE   
+    # START FORMATTING
 
-    if type==0:
+    if fs_type==0:
         try:
-            subprocess.run(["pkexec", "mkfs.ntfs", "-c", clusters, "-Q", mount], check=True)
+            subprocess.run(["pkexec", "mkfs.ntfs", "-c", str(clusters), "-Q", drive], check=True)
             print("success format to ntfs!")
         except FileNotFoundError:
             pkexecNotFound()
         except subprocess.CalledProcessError:
             FormatFail()
-        except Exception:
+        except Exception as e:
+            print(f"10. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
             unexpected()
-    elif type==1:
+    elif fs_type==1:
         try:
-            subprocess.run(["pkexec", "mkfs.vfat", "-s", sectors, "-F", "32", mount], check=True)
+            subprocess.run(["pkexec", "mkfs.vfat", "-s", str(sectors), "-F", "32", drive], check=True)
             print("success format to fat32!")
         except FileNotFoundError:
             pkexecNotFound()
         except subprocess.CalledProcessError:
             FormatFail()
-        except Exception:
+        except Exception as e:
+            print(f"11. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
             unexpected()
-    elif type==2:
+    elif fs_type==2:
         try:
-            subprocess.run(["pkexec", "mkfs.exfat", "-b", clusters, mount], check=True)
+            subprocess.run(["pkexec", "mkfs.exfat", "-b", str(clusters), drive], check=True)
             print("success format to exFAT!")
         except FileNotFoundError:
             pkexecNotFound()
         except subprocess.CalledProcessError:
             FormatFail()
-        except Exception:
+        except Exception as e:
+            print(f"12. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
             unexpected()
-    elif type==3:
+    elif fs_type==3:
         try:
-            subprocess.run(["pkexec", "mkfs.ext4", "-b", clusters, mount], check=True)
+            subprocess.run(["pkexec", "mkfs.ext4", "-b", str(clusters), drive], check=True)
             print("success format to ext4!")
         except FileNotFoundError:
             pkexecNotFound()
         except subprocess.CalledProcessError:
             FormatFail()
-        except Exception:
+        except Exception as e:
+            print(f"13. DEBUG: Unexpected error type: {type(e).__name__}")
+            print(f"DEBUG: Error message: {e}")
             unexpected()
     else:
         unexpected()
+    # REMOUNT

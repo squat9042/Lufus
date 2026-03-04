@@ -464,7 +464,7 @@ class Rufus(QMainWindow):
     
     def update_cluster_size(self):
         states.cluster_size = self.combo_cluster.currentIndex()
-        # print(f"Global state updated to: {states.cluster_size}")
+        print(f"Global state updated to: {states.cluster_size}")
 
     def update_QF(self):
         if self.chk_quick.isChecked():
@@ -519,32 +519,14 @@ class Rufus(QMainWindow):
         self.btn_cancel.setEnabled(False)
         self.progress_bar.setValue(100)
         self.progress_bar.setFormat("READY FOR ACTION")
-
-    def start_process(self):
-        self.btn_start.setEnabled(False)
-        self.btn_cancel.setEnabled(True)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFormat("Formatting... 0%")
-        self.simulate_write()
-
     def cancel_process(self):
-        reply = QMessageBox.question(self, "Cancel", "Are you sure you want to cancel?", 
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(self, "Cancel", "Are you sure you want to cancel?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("")
             self.btn_start.setEnabled(True)
             self.btn_cancel.setEnabled(False)
             self.statusBar.showMessage("Ready", 0)
-
-    def simulate_write(self):
-        self.timer = QTimer()
-        self.progress = 86
-        fo.dskformat()
-        fo.volumecustomlabel()
-        self.timer.timeout.connect(self.update_progress)
-        self.timer.start(100)
-
     def update_progress(self):
         self.progress += 1
         if self.progress > 100:
@@ -557,6 +539,32 @@ class Rufus(QMainWindow):
             self.btn_start.setEnabled(True)
             self.btn_cancel.setEnabled(False)
             self.statusBar.showMessage("Ready", 0)
+    
+    def start_process(self):
+        self.btn_start.setEnabled(False)
+        self.btn_cancel.setEnabled(True)
+        self.progress_bar.setValue(10)
+        self.progress_bar.setFormat("Starting.. 10%")
+        # unmount
+        fo.unmount()
+        self.progress_bar.setValue(30)
+        self.progress_bar.setFormat("Unmounted Drive.. 20%")
+        # we must either flash iso or format the drive
+        # logic will be implemented later
+        # dd flashing goes here
+
+        # format the drive
+        fo.dskformat()
+        self.progress_bar.setValue(60)
+        self.progress_bar.setFormat("Format Drive.. 60%")
+        # change label
+        fo.volumecustomlabel()
+        self.progress_bar.setValue(80)
+        self.progress_bar.setFormat("Changed Label.. 80%")
+        # re-mount
+        fo.remount()
+        self.progress_bar.setValue(100)
+        self.progress_bar.setFormat("Mount Done.. Completed! 100%")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
