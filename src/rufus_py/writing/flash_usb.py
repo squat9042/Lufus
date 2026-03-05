@@ -1,6 +1,6 @@
 import os
 import subprocess
-from rufus_py.writing.check_file_sig import _is_removable_device, _resolve_device_node
+from rufus_py.writing.check_file_sig import _resolve_device_node
 from rufus_py.writing.check_file_sig import check_iso_signature
 
 def FlashUSB(iso_path, usb_mount_path) -> bool:
