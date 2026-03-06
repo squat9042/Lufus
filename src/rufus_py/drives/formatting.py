@@ -235,7 +235,7 @@ def drive_repair():
     try:
         subprocess.run(["umount", drive], check=True)
         subprocess.run(cmd, input=b",,0c;\n", check=True)
-        subprocess.run(["mkfs.vfat", "-F", "32", "-n", "REPAIRED", "/dev/sdc1"], check=True)
+        subprocess.run(["mkfs.vfat", "-F", "32", "-n", "REPAIRED", drive], check=True)
         print("SUCCESSFULLY REPAIRED DRIVE (FAT32)")
     except: # Add different error handling 
         print("COULDN'T REPAIR DRIVE")
