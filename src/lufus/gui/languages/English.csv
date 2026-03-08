@@ -1,0 +1,86 @@
+key,value
+window_title,lufus
+log_window_title,lufus Log
+about_window_title,About
+settings_window_title,Settings
+btn_copy_log,Copy to Clipboard
+btn_save_log,Save Log...
+dlg_save_log_title,Save Log
+save_failed_title,Save Failed
+save_failed_body,Could not save log:
+settings_label_language,Language
+settings_no_languages,No languages found
+header_drive_properties,Drive Properties
+header_format_options,Format Options
+header_status,Status
+lbl_device,Device
+lbl_boot_selection,Boot selection
+lbl_image_option,Image option
+lbl_partition_scheme,Partition scheme
+lbl_target_system,Target system
+lbl_volume_label,Volume label
+lbl_file_system,File system
+lbl_flash_option,Flash option
+lbl_cluster_size,Cluster size
+combo_image_windows,Standard Windows installation
+combo_image_linux,Standard Linux
+combo_image_format,Only Formatting Mode
+combo_partition_gpt,GPT
+combo_partition_mbr,MBR
+combo_target_uefi,UEFI (non CSM)
+combo_target_bios,BIOS (or UEFI-CSM)
+combo_cluster_4096,4096 bytes (Default)
+combo_cluster_8192,8192 bytes
+combo_badblocks_1pass,1 Pass
+chk_quick_format,Quick Format
+chk_extended_label,Create Extended Label
+chk_badblocks,Check for Bad Blocks
+combo_flash_iso,Iso Mode
+combo_flash_woe,Woe USB
+combo_flash_ventoy,Ventoy
+combo_flash_dd,DD
+combo_flash_none,None
+btn_select,SELECT
+btn_start,START
+btn_cancel,CANCEL
+tooltip_refresh,Refresh USB devices (Ctrl+R)
+tooltip_download,Download updates
+tooltip_about,About
+tooltip_settings,Settings
+tooltip_log,Log
+status_ready,Ready
+status_scanning,Scanning for USB devices...
+status_scan_failed,Scan failed
+status_flashing,Flashing...
+progress_preparing,Preparing...
+progress_complete,Complete! 100%
+progress_failed,Failed
+progress_starting,Starting.. 10%
+progress_unmounted,Unmounted Drive.. 20%
+progress_formatted,Format Drive.. 60%
+progress_label_changed,Changed Label.. 80%
+progress_mount_done,Mount Done.. Completed! 100%
+msgbox_cancel_title,Cancel
+msgbox_cancel_body,Are you sure you want to cancel?
+msgbox_success_title,Success
+msgbox_success_body,USB drive flashed successfully!
+msgbox_error_title,Error
+msgbox_error_body,Failed to flash USB drive.
+msgbox_no_image_title,No Image
+msgbox_no_image_body,Please select a valid installation file first.
+msgbox_no_device_title,No Device
+msgbox_no_device_body,Please select a USB device first.
+msgbox_usb_found_title,New USB Device Found
+msgbox_usb_found_body,USB Device Found
+msgbox_no_devices_title,No Devices
+msgbox_no_devices_body,"No USB drives were found.
+Please connect a drive and try again."
+msgbox_scan_error_title,Scan Error
+msgbox_scan_error_body,Failed to scan for USB devices:
+no_usb_found,No USB devices found
+dlg_select_image_title,Select Disk Image
+dlg_select_image_filter,ISO Images (*.iso);;All Files (*)
+about_content,"lufus is a disk image writer written in Python for Linux.
+Inspired by the original lufus tool for Windows.
+Version: 1.0.0
+GitHub: github.com/hog185/lufus"

@@ -1,6 +1,7 @@
 import sys
 import json
 import os
+import csv
 import platform
 import getpass
 from datetime import datetime
@@ -8,14 +9,13 @@ from glob import glob
 import urllib.parse
 import webbrowser
 from pathlib import Path
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QGridLayout, QLabel, QComboBox, 
-                             QPushButton, QProgressBar, QCheckBox, 
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                             QHBoxLayout, QGridLayout, QLabel, QComboBox,
+                             QPushButton, QProgressBar, QCheckBox,
                              QMessageBox, QDialog, QTextEdit, QFileDialog,
                              QLineEdit, QFrame, QStatusBar, QToolButton, QSpacerItem)
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QPoint, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QFont
-
 from lufus.drives import states
 from lufus.drives import formatting as fo
 from lufus.writing.flash_usb import FlashUSB
@@ -24,12 +24,20 @@ from lufus.drives.find_usb import find_usb
 from lufus.drives.autodetect_usb import UsbMonitor
 
 
+def load_translations(language="English"):
+    lang_file = Path(__file__).parent / "languages" / f"{language}.csv"
+    t = {}
+    if lang_file.exists():
+        with open(lang_file, encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+                t[row["key"]] = row["value"]
+    return t
+
+
 class StdoutRedirector:
-    """Intercepts sys.stdout so every print() in every backend module
-    flows into the GUI log automatically."""
     def __init__(self, log_fn):
         self._log_fn = log_fn
-        self._real_stdout = sys.__stdout__
+        self._real_stdout = sys.stdout
         self._buf = ""
 
     def write(self, text):
@@ -49,12 +57,11 @@ class StdoutRedirector:
 
 
 class LogWindow(QDialog):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("lufus Log")
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Log Window")
         self.resize(650, 450)
         layout = QVBoxLayout()
-
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 9))
@@ -62,10 +69,10 @@ class LogWindow(QDialog):
         layout.addWidget(self.log_text)
 
         btn_row = QHBoxLayout()
-        btn_copy = QPushButton("Copy to Clipboard")
+        btn_copy = QPushButton("Copy Log")
         btn_copy.setFixedWidth(140)
         btn_copy.clicked.connect(self._copy_log)
-        btn_save = QPushButton("Save Log...")
+        btn_save = QPushButton("Save Log")
         btn_save.setFixedWidth(100)
         btn_save.clicked.connect(self._save_log)
         btn_row.addWidget(btn_copy)
@@ -89,24 +96,24 @@ class LogWindow(QDialog):
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(self.log_text.toPlainText())
             except OSError as e:
-                QMessageBox.critical(self, "Save Failed", f"Could not save log:\n{e}")
+                QMessageBox.critical(self, "Save Failed", f'Failed to save log\n{e}')
+
 
 class Notification(QFrame):
     def __init__(self, message, notification_type="info", duration=3000, parent=None):
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | 
-                           Qt.WindowType.Tool | 
-                           Qt.WindowType.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)   
-        
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
+                            Qt.WindowType.Tool |
+                            Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         colors = {
             'info': '#3498db',
             'success': '#2ecc71',
         }
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.label = QLabel(message)
         self.label.setWordWrap(True)
         self.label.setStyleSheet(f"""
@@ -120,22 +127,22 @@ class Notification(QFrame):
             }}
         """)
         layout.addWidget(self.label)
-        
+
         self.fade_in = QPropertyAnimation(self, b"windowOpacity")
         self.fade_in.setDuration(200)
         self.fade_in.setStartValue(0.0)
         self.fade_in.setEndValue(1.0)
-        
+
         self.adjustSize()
         self.position_notification()
         self.show()
         self.fade_in.start()
-        
+
         self.timer = QTimer()
         self.timer.timeout.connect(self.fade_out)
         self.timer.setSingleShot(True)
         self.timer.start(duration)
-    
+
     def fade_out(self):
         self.fade_out_anim = QPropertyAnimation(self, b"windowOpacity")
         self.fade_out_anim.setDuration(200)
@@ -143,10 +150,10 @@ class Notification(QFrame):
         self.fade_out_anim.setEndValue(0.0)
         self.fade_out_anim.finished.connect(self.close)
         self.fade_out_anim.start()
-    
+
     def position_notification(self, index=0):
         screen = QApplication.primaryScreen().availableGeometry()
-        
+
         if self.parent() and isinstance(self.parent(), QWidget):
             parent_geo = self.parent().frameGeometry()
             if screen.contains(parent_geo.topLeft()):
@@ -154,16 +161,17 @@ class Notification(QFrame):
                 y = parent_geo.bottom() - (self.height() + 10) * (index + 1) - 20
                 self.move(int(x), int(y))
                 return
-        
+
         x = screen.right() - self.width() - 20
         y = screen.bottom() - (self.height() + 10) * (index + 1) - 20
         self.move(int(x), int(y))
+
 
 class NotificationManager:
     def __init__(self, parent=None):
         self.parent = parent
         self.notifications = []
-    
+
     def show(self, message, notification_type='info', duration=3000):
         notification = Notification(message, notification_type, duration, self.parent)
         self.notifications.append(notification)
@@ -171,9 +179,11 @@ class NotificationManager:
         notification.show()
         notification.destroyed.connect(lambda: self.notifications.remove(notification))
 
+
 class AboutWindow(QDialog):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_window = parent
         self.setWindowTitle("About")
         self.resize(650, 450)
         layout = QVBoxLayout()
@@ -185,17 +195,67 @@ class AboutWindow(QDialog):
         self.setLayout(layout)
 
 
+class SettingsDialog(QDialog):
+    language_changed = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        self.setFixedSize(650, 450)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+
+        lbl_lang = QLabel("Language")
+        lbl_lang.setStyleSheet("font-weight: normal; font-size: 9pt;")
+
+        self.combo_language = QComboBox()
+        languages = self._detect_languages()
+        if languages:
+            self.combo_language.addItems(languages)
+            current_lang = states.language if hasattr(states, 'language') else "English"
+            if current_lang in languages:
+                self.combo_language.setCurrentText(current_lang)
+        else:
+            self.combo_language.addItem("No languages found")
+            self.combo_language.setEnabled(False)
+
+        layout.addWidget(lbl_lang)
+        layout.addWidget(self.combo_language)
+        layout.addStretch()
+        self.setLayout(layout)
+
+        btn_ok = QPushButton("OK")
+        btn_ok.clicked.connect(self._on_ok_clicked)
+        layout.addWidget(btn_ok)
+
+    def _on_ok_clicked(self):
+        language = self.combo_language.currentText()
+        if language != "No languages found":
+            self.language_changed.emit(language)
+        self.accept()
+
+    @staticmethod
+    def _detect_languages():
+        languages_dir = Path(__file__).parent / "languages"
+        if not languages_dir.is_dir():
+            return []
+        return sorted(
+            p.stem for p in languages_dir.glob("*.csv")
+        )
+
+
 class FlashWorker(QThread):
     """Worker thread for flashing ISO to USB without freezing UI"""
     finished = pyqtSignal(bool)
     progress = pyqtSignal(str)
     progress_value = pyqtSignal(int)
-    
+
     def __init__(self, iso_path: str, device_node: str):
         super().__init__()
         self.iso_path = iso_path
         self.device_node = device_node
-    
+
     def run(self):
         try:
             self.progress.emit(f"Unmounting all partitions on {self.device_node}...")
@@ -206,16 +266,16 @@ class FlashWorker(QThread):
                 self.progress.emit(f"Unmounting {partition}...")
                 fo.unmount(partition)
                 self.progress.emit(f"Unmounted {partition}")
-            
+
             self.progress.emit(f"Starting ISO flash: {self.iso_path} -> {self.device_node}")
             self.progress_value.emit(5)
             result = FlashUSB(self.iso_path, self.device_node, progress_cb=self.progress_value.emit, status_cb=self.progress.emit)
-            
+
             if result:
                 self.progress.emit(f"Flash completed successfully: {self.iso_path} -> {self.device_node}")
             else:
                 self.progress.emit(f"Flash failed for {self.iso_path} -> {self.device_node}")
-            
+
             self.finished.emit(result)
         except Exception as e:
             self.progress.emit(f"Unhandled exception in flash worker: {type(e).__name__}: {str(e)}")
@@ -269,9 +329,12 @@ class lufus(QMainWindow):
         self.monitor = UsbMonitor()
         self.monitor.device_added.connect(self.on_usb_added)
         self.monitor.device_list_updated.connect(self.update_usb_list)
-        
         self.usb_devices = usb_devices or {}
-        self.setWindowTitle("lufus")
+
+        self.current_language = getattr(states, 'language', 'English')
+        self._T = load_translations(self.current_language)
+
+        self.setWindowTitle(self._T.get("window_title", "lufus"))
         self.setFixedSize(640, 690)
         self.flash_worker = None
         self.log_window = None
@@ -374,8 +437,7 @@ class lufus(QMainWindow):
             QCheckBox {
                 spacing: 2px;
                 font-size: 8pt;
-                max-height:12px
-                max-width:12px
+                max-height:12px;
             }
             QProgressBar {
                 border: 1px solid #A0A0A0;
@@ -425,8 +487,6 @@ class lufus(QMainWindow):
             }
         """)
 
-
-
     def create_header(self, text):
         """Create a section header with a horizontal line"""
         layout = QHBoxLayout()
@@ -440,18 +500,18 @@ class lufus(QMainWindow):
         layout.addWidget(label)
         layout.addWidget(line, 1)
         return layout
-    
-    def update_usb_list(self,devices:dict):
+
+    def update_usb_list(self, devices: dict):
         self.combo_device.clear()
-        self.usb_devices=devices
-        
+        self.usb_devices = devices
+
         if not devices:
-            self.combo_device.addItem("No USB devices found", None)
+            self.combo_device.addItem(self._T.get("no_usb_found", "No USB devices found"), None)
             return
 
         for node, label in devices.items():
             display = f"{label} ({node})" if label != node else node
-            self.combo_device.addItem(display, node) 
+            self.combo_device.addItem(display, node)
 
     def on_usb_added(self, node):
         self.log_message(f"USB device connected: {node}")
@@ -460,7 +520,7 @@ class lufus(QMainWindow):
     def create_refresh_button(self):
         btn = QToolButton()
         btn.setText("🔄")
-        btn.setToolTip("Refresh USB devices (Ctrl+R)")
+        btn.setToolTip(self._T.get("tooltip_refresh", "Refresh"))
         btn.setStyleSheet("""
             QToolButton {
                 border: 1px solid #D0D0D0;
@@ -490,166 +550,158 @@ class lufus(QMainWindow):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(15, 10, 15, 10)
 
-        main_layout.addLayout(self.create_header("Drive Properties"))
+        main_layout.addLayout(self.create_header(self._T.get("header_drive_properties", "Drive Properties")))
 
-        lbl_device = QLabel("Device")
-        lbl_device.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
+        self.lbl_device = QLabel(self._T.get("lbl_device", "Device"))
+        self.lbl_device.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
         self.combo_device = QComboBox()
-        
+
         self._populate_device_combo()
-        
+
         btn_refresh = self.create_refresh_button()
-        
+
         device_row = QHBoxLayout()
         device_row.setSpacing(5)
         device_row.addWidget(self.combo_device, 1)
         device_row.addWidget(btn_refresh)
-        
+
         device_layout = QVBoxLayout()
         device_layout.setSpacing(2)
-        device_layout.addWidget(lbl_device)
+        device_layout.addWidget(self.lbl_device)
         device_layout.addLayout(device_row)
         main_layout.addLayout(device_layout)
 
-        # Boot selection
-        lbl_boot = QLabel("Boot selection")
-        lbl_boot.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
-        
+        self.lbl_boot = QLabel(self._T.get("lbl_boot_selection", "Boot Selection"))
+        self.lbl_boot.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
+
         boot_row = QHBoxLayout()
         boot_row.setSpacing(5)
-        
+
         self.combo_boot = QComboBox()
         self.combo_boot.setEditable(True)
         self.combo_boot.lineEdit().setReadOnly(True)
         self.combo_boot.addItem("installationmedia.iso")
-        
-        lbl_check = QLabel("✓") 
+
+        lbl_check = QLabel("✓")
         lbl_check.setStyleSheet("font-size: 14pt; color: #666; padding: 0 5px;")
-        
-        btn_select = QPushButton("SELECT")
-        btn_select.clicked.connect(self.browse_file)
-        
+
+        self.btn_select = QPushButton(self._T.get("btn_select", "Select"))
+        self.btn_select.clicked.connect(self.browse_file)
+
         boot_row.addWidget(self.combo_boot, 1)
         boot_row.addWidget(lbl_check)
-        boot_row.addWidget(btn_select)
-        
+        boot_row.addWidget(self.btn_select)
+
         boot_layout = QVBoxLayout()
         boot_layout.setSpacing(2)
-        boot_layout.addWidget(lbl_boot)
+        boot_layout.addWidget(self.lbl_boot)
         boot_layout.addLayout(boot_row)
         main_layout.addLayout(boot_layout)
 
-        # Image option
-        lbl_image = QLabel("Image option")
-        lbl_image.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
+        self.lbl_image = QLabel(self._T.get("lbl_image_option", "Image Option"))
+        self.lbl_image.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
         self.combo_image_option = QComboBox()
-        self.combo_image_option.addItem("Standard Windows installation")
-        #self.combo_image_option.addItem("Windows To Go")
-        self.combo_image_option.addItem("Standard Linux")
-        self.combo_image_option.addItem("Only Formatting Mode")
+        self.combo_image_option.addItem(self._T.get("combo_image_windows", "Windows"))
+        self.combo_image_option.addItem(self._T.get("combo_image_linux", "Linux"))
+        self.combo_image_option.addItem(self._T.get("combo_image_format", "Format Only"))
         self.combo_image_option.currentTextChanged.connect(self.update_image_option)
 
         image_layout = QVBoxLayout()
         image_layout.setSpacing(2)
-        image_layout.addWidget(lbl_image)
+        image_layout.addWidget(self.lbl_image)
         image_layout.addWidget(self.combo_image_option)
         main_layout.addLayout(image_layout)
 
-        # Partition scheme and target system
         grid_part = QGridLayout()
         grid_part.setSpacing(10)
         grid_part.setColumnStretch(1, 1)
         grid_part.setColumnStretch(3, 1)
-        
-        lbl_part = QLabel("Partition scheme")
-        lbl_part.setStyleSheet("font-weight: normal; font-size: 9pt;")
+
+        self.lbl_part = QLabel(self._T.get("lbl_partition_scheme", "Partition Scheme"))
+        self.lbl_part.setStyleSheet("font-weight: normal; font-size: 9pt;")
         self.combo_partition = QComboBox()
-        self.combo_partition.addItem("GPT")
-        self.combo_partition.addItem("MBR")
+        self.combo_partition.addItem(self._T.get("combo_partition_gpt", "GPT"))
+        self.combo_partition.addItem(self._T.get("combo_partition_mbr", "MBR"))
         self.combo_partition.currentTextChanged.connect(self.update_partition_scheme)
 
-        lbl_target = QLabel("Target system")
-        lbl_target.setStyleSheet("font-weight: normal; font-size: 9pt;")
+        self.lbl_target = QLabel(self._T.get("lbl_target_system", "Target System"))
+        self.lbl_target.setStyleSheet("font-weight: normal; font-size: 9pt;")
         self.combo_target = QComboBox()
-        self.combo_target.addItem("UEFI (non CSM)")
-        self.combo_target.addItem("BIOS (or UEFI-CSM)")
+        self.combo_target.addItem(self._T.get("combo_target_uefi", "UEFI"))
+        self.combo_target.addItem(self._T.get("combo_target_bios", "BIOS"))
         self.combo_target.currentTextChanged.connect(self.update_target_system)
 
-        grid_part.addWidget(lbl_part, 0, 0)
+        grid_part.addWidget(self.lbl_part, 0, 0)
         grid_part.addWidget(self.combo_partition, 1, 0)
-        grid_part.addWidget(lbl_target, 0, 2)
+        grid_part.addWidget(self.lbl_target, 0, 2)
         grid_part.addWidget(self.combo_target, 1, 2)
         main_layout.addLayout(grid_part)
-        
+
         main_layout.addSpacing(15)
 
-        # === FORMAT OPTIONS ===
-        main_layout.addLayout(self.create_header("Format Options"))
+        main_layout.addLayout(self.create_header(self._T.get("header_format_options", "Format Options")))
 
-        # Volume label
-        lbl_vol = QLabel("Volume label")
-        lbl_vol.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
-        self.input_label = QLineEdit("Volume label")
+        self.lbl_vol = QLabel(self._T.get("lbl_volume_label", "Volume Label"))
+        self.lbl_vol.setStyleSheet("font-weight: normal; font-size: 9pt; padding-bottom: 2px;")
+        self.input_label = QLineEdit(self._T.get("lbl_volume_label", "Volume Label"))
         self.input_label.textChanged.connect(self.update_new_label)
-        
+
         vol_layout = QVBoxLayout()
         vol_layout.setSpacing(2)
-        vol_layout.addWidget(lbl_vol)
+        vol_layout.addWidget(self.lbl_vol)
         vol_layout.addWidget(self.input_label)
         main_layout.addLayout(vol_layout)
 
-        # File system and cluster size
         grid_fmt = QGridLayout()
         grid_fmt.setSpacing(10)
         grid_fmt.setColumnStretch(1, 1)
         grid_fmt.setColumnStretch(3, 1)
-        
-        lbl_fs = QLabel("File system")
-        lbl_fs.setStyleSheet("font-weight: normal; font-size: 9pt;")
+
+        self.lbl_fs = QLabel(self._T.get("lbl_file_system", "File System"))
+        self.lbl_fs.setStyleSheet("font-weight: normal; font-size: 9pt;")
         self.combo_fs = QComboBox()
         self.all_fs_options = ["NTFS", "FAT32", "exFAT", "ext4", "UDF"]
         self.combo_fs.addItems(self.all_fs_options)
         self.combo_fs.currentTextChanged.connect(self.updateFS)
 
-        lbl_flash = QLabel("Flash option")
-        lbl_flash.setStyleSheet("font-weight: normal; font-size: 9pt;")
+        self.lbl_flash = QLabel(self._T.get("lbl_flash_option", "Flash Option"))
+        self.lbl_flash.setStyleSheet("font-weight: normal; font-size: 9pt;")
         self.combo_flash = QComboBox()
-        self.all_flash_options = ["Iso Mode","Woe USB","Ventoy","DD"]
+        self.all_flash_options = [self._T.get("combo_flash_iso", "ISO"), self._T.get("combo_flash_woe", "WoeUSB"), self._T.get("combo_flash_ventoy", "Ventoy"), self._T.get("combo_flash_dd", "DD")]
         self.combo_flash.addItems(self.all_flash_options)
         self.combo_flash.currentTextChanged.connect(self.updateflash)
-        
-        lbl_cluster = QLabel("Cluster size")
-        lbl_cluster.setStyleSheet("font-weight: normal; font-size: 9pt;")
+
+        self.lbl_cluster = QLabel(self._T.get("lbl_cluster_size", "Cluster Size"))
+        self.lbl_cluster.setStyleSheet("font-weight: normal; font-size: 9pt;")
         self.combo_cluster = QComboBox()
-        self.combo_cluster.addItem("4096 bytes (Default)")
-        self.combo_cluster.addItem("8192 bytes")
+        self.combo_cluster.addItem(self._T.get("combo_cluster_4096", "4096"))
+        self.combo_cluster.addItem(self._T.get("combo_cluster_8192", "8192"))
         self.combo_cluster.currentTextChanged.connect(self.update_cluster_size)
-        
-        grid_fmt.addWidget(lbl_fs, 0, 0)
+
+        grid_fmt.addWidget(self.lbl_fs, 0, 0)
         grid_fmt.addWidget(self.combo_fs, 1, 0)
-        grid_fmt.addWidget(lbl_flash, 0, 5)
+        grid_fmt.addWidget(self.lbl_flash, 0, 5)
         grid_fmt.addWidget(self.combo_flash, 1, 5)
-        grid_fmt.addWidget(lbl_cluster, 0, 2)
+        grid_fmt.addWidget(self.lbl_cluster, 0, 2)
         grid_fmt.addWidget(self.combo_cluster, 1, 2)
         main_layout.addLayout(grid_fmt)
 
-        # Checkboxes
-        self.chk_quick = QCheckBox("Quick format")
+        self.chk_quick = QCheckBox(self._T.get("chk_quick_format", "Quick Format"))
         self.chk_quick.setChecked(True)
         self.chk_quick.stateChanged.connect(self.update_QF)
 
-        self.chk_extended = QCheckBox("Create extended label and icon files")
+        self.chk_extended = QCheckBox(self._T.get("chk_extended_label", "Create Extended Label"))
         self.chk_extended.setChecked(True)
         self.chk_extended.stateChanged.connect(self.update_create_extended)
-        
+
         bad_blocks_row = QHBoxLayout()
-        self.chk_badblocks = QCheckBox("Check device for bad blocks")
+        self.chk_badblocks = QCheckBox(self._T.get("chk_bad_blocks", "Check for Bad Blocks"))
         self.combo_badblocks = QComboBox()
-        self.combo_badblocks.addItem("1 pass")
+        self.combo_badblocks.addItem(self._T.get("combo_badblocks_1pass", "1 Pass"))
         self.combo_badblocks.setFixedWidth(100)
         self.combo_badblocks.setEnabled(False)
         self.chk_badblocks.stateChanged.connect(self.update_check_bad)
-        
+
         bad_blocks_row.addWidget(self.chk_badblocks)
         bad_blocks_row.addWidget(self.combo_badblocks)
         bad_blocks_row.addStretch()
@@ -660,114 +712,109 @@ class lufus(QMainWindow):
         chk_layout.addWidget(self.chk_extended)
         chk_layout.addLayout(bad_blocks_row)
         main_layout.addLayout(chk_layout)
-        
+
         main_layout.addSpacing(15)
 
-        # === STATUS ===
-        main_layout.addLayout(self.create_header("Status"))
+        main_layout.addLayout(self.create_header(self._T.get("header_status", "Status")))
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("")
         main_layout.addWidget(self.progress_bar)
 
-        # Bottom controls
         bottom_controls = QHBoxLayout()
         bottom_controls.setSpacing(10)
         bottom_controls.setContentsMargins(0, 10, 0, 0)
-        
-        # Icon buttons
+
         icons_layout = QHBoxLayout()
         icons_layout.setSpacing(5)
-        
+
         btn_icon1 = QToolButton()
         btn_icon1.setText("🌐")
-        btn_icon1.setToolTip("Download updates")
+        btn_icon1.setToolTip(self._T.get("tooltip_download", "Download"))
         btn_icon1.clicked.connect(lambda: webbrowser.open('http://www.github.com/hog185/lufus'))
-        
+
         btn_icon2 = QToolButton()
         btn_icon2.setText("ℹ")
-        btn_icon2.setToolTip("About")
+        btn_icon2.setToolTip(self._T.get("tooltip_about", "About"))
         btn_icon2.clicked.connect(self.show_about)
-        
+
         btn_icon3 = QToolButton()
         btn_icon3.setText("⚙")
-        btn_icon3.setToolTip("Settings")
-        
+        btn_icon3.setToolTip(self._T.get("tooltip_settings", "Settings"))
+        btn_icon3.clicked.connect(self.show_settings)
+
         btn_icon4 = QToolButton()
         btn_icon4.setText("📄")
-        btn_icon4.setToolTip("Log")
+        btn_icon4.setToolTip(self._T.get("tooltip_log", "Log"))
         btn_icon4.clicked.connect(self.show_log)
-        
+
         icons_layout.addWidget(btn_icon1)
         icons_layout.addWidget(btn_icon2)
         icons_layout.addWidget(btn_icon3)
         icons_layout.addWidget(btn_icon4)
         icons_layout.addStretch()
-        
-        # Start/Cancel buttons
-        self.btn_start = QPushButton("START")
+
+        self.btn_start = QPushButton(self._T.get("btn_start", "Start"))
         self.btn_start.setObjectName("btnStart")
         self.btn_start.setFixedSize(100, 50)
         self.btn_start.clicked.connect(self.start_process)
 
-        self.btn_cancel = QPushButton("CANCEL")
+        self.btn_cancel = QPushButton(self._T.get("btn_cancel", "Cancel"))
         self.btn_cancel.setFixedSize(100, 50)
         self.btn_cancel.clicked.connect(self.cancel_process)
-        
+
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
         btn_layout.addWidget(self.btn_start)
         btn_layout.addWidget(self.btn_cancel)
-        
+
         bottom_controls.addLayout(icons_layout, 1)
         bottom_controls.addLayout(btn_layout)
         main_layout.addLayout(bottom_controls)
-        
+
         main_layout.addStretch()
         central_widget.setLayout(main_layout)
-        
-        # Status bar
+
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Ready", 0)
+        self.statusBar.showMessage(self._T.get("status_ready", "Ready"), 0)
 
     def _populate_device_combo(self):
         """Populate the device combo box with USB devices"""
         self.combo_device.blockSignals(True)
         self.combo_device.clear()
-        
+
         if self.usb_devices:
             for node, label in self.usb_devices.items():
                 display = f"{label} ({node})" if label != node else node
                 self.combo_device.addItem(display, node)
         else:
-            self.combo_device.addItem("No USB devices found",None)
-        
+            self.combo_device.addItem(self._T.get("no_usb_found", "No USB devices found"), None)
+
         self.combo_device.blockSignals(False)
 
     def refresh_usb_devices(self):
-        self.statusBar.showMessage("Scanning for USB devices...", 2000)
+        self.statusBar.showMessage(self._T.get("status_scanning", "Scanning..."), 2000)
         self.log_message("USB device scan initiated")
         try:
             new_devices = self.monitor.devices
             self.log_message(f"USB scan result: {len(new_devices)} device(s) found: {list(new_devices.keys())}")
-            
+
             if new_devices:
                 self.usb_devices = new_devices
                 self._populate_device_combo()
                 self.log_message(f"Device list updated: {[f'{k} ({v})' for k, v in new_devices.items()]}")
-                QMessageBox.information(self, "New USB Device Found","USB Device Found")            
+                QMessageBox.information(self, self._T.get("msgbox_usb_found_title", "USB Found"), self._T.get("msgbox_usb_found_body", "USB device(s) found"))
             else:
                 self.usb_devices = {}
                 self._populate_device_combo()
                 self.log_message("No USB devices detected after scan", level="WARN")
-                QMessageBox.information(self, "No Devices", 
-                    "No USB drives were found.\n\nPlease connect a drive and try again.")
+                QMessageBox.information(self, self._T.get("msgbox_no_devices_title", "No Devices"), self._T.get("msgbox_no_devices_body", "No USB devices detected"))
         except Exception as e:
-            self.statusBar.showMessage("Scan failed", 3000)
+            self.statusBar.showMessage(self._T.get("status_scan_failed", "Scan Failed"), 3000)
             self.log_message(f"USB scan raised exception: {type(e).__name__}: {str(e)}", level="ERROR")
-            QMessageBox.critical(self, "Scan Error", f"Failed to scan for USB devices:\n{str(e)}")
+            QMessageBox.critical(self, self._T.get("msgbox_scan_error_title", "Scan Error"), f'{self._T.get("msgbox_scan_error_body", "Scan failed")}\n{str(e)}')
 
     def updateFS(self):
         states.currentFS = self.combo_fs.currentIndex()
@@ -783,7 +830,7 @@ class lufus(QMainWindow):
         self.log_message(f"Image option changed to: {self.combo_image_option.currentText()} (index={states.image_option})")
         self._update_filesystem_options()
         self._update_flashing_options()
-    
+
     def _update_filesystem_options(self):
         self.combo_fs.blockSignals(True)
         if states.image_option == 1:
@@ -796,23 +843,19 @@ class lufus(QMainWindow):
         self.combo_fs.blockSignals(False)
         self.updateFS()
 
-
     def _update_flashing_options(self):
         self.combo_flash.blockSignals(True)
         self.combo_flash.clear()
-        
+
         if states.image_option == 1:
-            # Linux mode: only DD and Ventoy
-            self.combo_flash.addItems(["DD", "Ventoy"])
-            self.combo_flash.setCurrentText("DD")
+            self.combo_flash.addItems([self._T.get("combo_flash_dd", "DD"), self._T.get("combo_flash_ventoy", "Ventoy")])
+            self.combo_flash.setCurrentText(self._T.get("combo_flash_dd", "DD"))
         elif states.image_option == 0:
-            # Windows/Other mode: Iso Mode, Woe USB, Ventoy
-            self.combo_flash.addItems(["Iso Mode", "Woe USB", "Ventoy"])
-            self.combo_flash.setCurrentText("Iso Mode")
+            self.combo_flash.addItems([self._T.get("combo_flash_iso", "ISO"), self._T.get("combo_flash_woe", "WoeUSB"), self._T.get("combo_flash_ventoy", "Ventoy")])
+            self.combo_flash.setCurrentText(self._T.get("combo_flash_iso", "ISO"))
         elif states.image_option == 2:
-            # Windows/Other mode: Iso Mode, Woe USB, Ventoy
-            self.combo_flash.addItems(["None"])
-            self.combo_flash.setCurrentText("None")
+            self.combo_flash.addItems([self._T.get("combo_flash_none", "None")])
+            self.combo_flash.setCurrentText(self._T.get("combo_flash_none", "None"))
         self.combo_flash.blockSignals(False)
         self.updateflash()
 
@@ -846,8 +889,7 @@ class lufus(QMainWindow):
         self.log_message(f"Bad block check: {'enabled' if self.chk_badblocks.isChecked() else 'disabled'}")
 
     def browse_file(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Select Disk Image", "", 
-                                                    "ISO Images (*.iso);;All Files (*)")
+        file_name, _ = QFileDialog.getOpenFileName(self, self._T.get("dlg_select_image_title", "Select Image"), "", self._T.get("dlg_select_image_filter", "ISO Files (*.iso)"))
         if file_name:
             file_size = os.path.getsize(file_name)
             states.iso_path = file_name
@@ -859,7 +901,7 @@ class lufus(QMainWindow):
 
     def show_log(self):
         if self.log_window is None:
-            self.log_window = LogWindow()
+            self.log_window = LogWindow(self)
         self.log_window.log_text.setPlainText("\n".join(self.log_entries))
         self.log_window.show()
         self.log_window.raise_()
@@ -878,26 +920,67 @@ class lufus(QMainWindow):
 
     def show_about(self):
         if self.about_window is None:
-            self.about_window = AboutWindow()
-            about_content = "lufus is a disk image writer written in Python for Linux.\n\n"
-            about_content += "Inspired by the original lufus tool for Windows.\n\n"
-            about_content += "Version: 1.0.0\n"
-            about_content += "GitHub: github.com/hog185/lufus"
-            self.about_window.about_text.setPlainText(about_content)
+            self.about_window = AboutWindow(self)
+            self.about_window.about_text.setPlainText(self._T.get("about_content", "lufus - USB Flash Tool"))
         self.about_window.show()
         self.about_window.raise_()
         self.about_window.activateWindow()
+
+    def show_settings(self):
+        dlg = SettingsDialog(self)
+        dlg.language_changed.connect(self.apply_language)
+        dlg.exec()
+
+    def apply_language(self, language):
+        self.current_language = language
+        states.language = language
+        self._T = load_translations(language)
+
+        self._update_ui_text()
+        self.log_message(f"Language changed to: {language}")
+
+    def _update_ui_text(self):
+        self.setWindowTitle(self._T.get("window_title", "lufus"))
+
+        self.lbl_device.setText(self._T.get("lbl_device", "Device"))
+        self.lbl_boot.setText(self._T.get("lbl_boot_selection", "Boot Selection"))
+        self.btn_select.setText(self._T.get("btn_select", "Select"))
+        self.lbl_image.setText(self._T.get("lbl_image_option", "Image Option"))
+        self.lbl_part.setText(self._T.get("lbl_partition_scheme", "Partition Scheme"))
+        self.lbl_target.setText(self._T.get("lbl_target_system", "Target System"))
+        self.lbl_vol.setText(self._T.get("lbl_volume_label", "Volume Label"))
+        self.lbl_fs.setText(self._T.get("lbl_file_system", "File System"))
+        self.lbl_flash.setText(self._T.get("lbl_flash_option", "Flash Option"))
+        self.lbl_cluster.setText(self._T.get("lbl_cluster_size", "Cluster Size"))
+
+        self.chk_quick.setText(self._T.get("chk_quick_format", "Quick Format"))
+        self.chk_extended.setText(self._T.get("chk_extended_label", "Create Extended Label"))
+        self.chk_badblocks.setText(self._T.get("chk_bad_blocks", "Check for Bad Blocks"))
+
+        self.btn_start.setText(self._T.get("btn_start", "Start"))
+        self.btn_cancel.setText(self._T.get("btn_cancel", "Cancel"))
+
+        self.statusBar.showMessage(self._T.get("status_ready", "Ready"), 0)
+
+        if self.log_window:
+            self.log_window.setWindowTitle(self._T.get("log_window_title", "Log Window"))
+
+        if self.about_window:
+            self.about_window.setWindowTitle(self._T.get("about_window_title", "About"))
+            self.about_window.about_text.setPlainText(self._T.get("about_content", "lufus - USB Flash Tool"))
+
+        self._update_flashing_options()
 
     def get_selected_mount_path(self) -> str:
         text = self.combo_device.currentText()
         if '(' in text and ')' in text:
             return text.split('(')[1].split(')')[0].strip()
         return ""
-    
+
     def cancel_process(self):
-        reply = QMessageBox.question(self, "Cancel", 
-            "Are you sure you want to cancel?", 
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(self, self._T.get("msgbox_cancel_title", "Cancel"),
+                                     self._T.get("msgbox_cancel_body", "Are you sure you want to cancel?"),
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             if self.flash_worker and self.flash_worker.isRunning():
                 self.log_message("Sending terminate signal to flash worker thread", level="WARN")
@@ -908,49 +991,44 @@ class lufus(QMainWindow):
             self.progress_bar.setFormat("")
             self.btn_start.setEnabled(True)
             self.btn_cancel.setEnabled(False)
-            self.statusBar.showMessage("Ready", 0)
+            self.statusBar.showMessage(self._T.get("status_ready", "Ready"), 0)
             self.log_message("Flash process cancelled by user", level="WARN")
-    
+
     def on_flash_finished(self, success: bool):
         if success:
             self.progress_bar.setValue(100)
-            self.progress_bar.setFormat("Complete! 100%")
+            self.progress_bar.setFormat(self._T.get("progress_complete", "Complete"))
             self.log_message("Flash operation finished with result: SUCCESS")
-            QMessageBox.information(self, "Success", "USB drive flashed successfully!")
+            QMessageBox.information(self, self._T.get("msgbox_success_title", "Success"), self._T.get("msgbox_success_body", "Flash completed successfully"))
         else:
-            self.progress_bar.setFormat("Failed")
+            self.progress_bar.setFormat(self._T.get("progress_failed", "Failed"))
             self.log_message("Flash operation finished with result: FAILED", level="ERROR")
-            QMessageBox.critical(self, "Error", "Failed to flash USB drive.")
-        
+            QMessageBox.critical(self, self._T.get("msgbox_error_title", "Error"), self._T.get("msgbox_error_body", "Flash failed"))
+
         self.btn_start.setEnabled(True)
         self.btn_cancel.setEnabled(False)
-        self.statusBar.showMessage("Ready", 0)
-    
+        self.statusBar.showMessage(self._T.get("status_ready", "Ready"), 0)
+
     def start_process(self):
-
-        # Bad blocks check
-        if states.check_bad == 0:
-            fo.checkdevicebadblock()
-
         states.DN = self.combo_device.currentData() or ""
         self.log_message(f"Start process triggered: image_option={states.image_option}, flash_mode={states.currentflash}, device={states.DN}")
-        if states.image_option == 0: # WINDOWS
-            if states.currentflash == 0: # iso mode
+        if states.image_option == 0:
+            if states.currentflash == 0:
                 if not getattr(states, 'iso_path', '') or not Path(states.iso_path).exists():
                     self.log_message("Start aborted: no valid ISO path set", level="WARN")
-                    QMessageBox.warning(self, "No Image", "Please select a valid installation file first.")
+                    QMessageBox.warning(self, self._T.get("msgbox_no_image_title", "No Image"), self._T.get("msgbox_no_image_body", "Please select an ISO file"))
                     return
                 mount_path = self.get_selected_mount_path()
                 if not mount_path:
                     self.log_message("Start aborted: no USB device selected", level="WARN")
-                    QMessageBox.warning(self, "No Device", "Please select a USB device first.")
+                    QMessageBox.warning(self, self._T.get("msgbox_no_device_title", "No Device"), self._T.get("msgbox_no_device_body", "Please select a USB device"))
                     return
 
                 self.btn_start.setEnabled(False)
                 self.btn_cancel.setEnabled(True)
                 self.progress_bar.setValue(0)
-                self.progress_bar.setFormat("Preparing...")
-                self.statusBar.showMessage("Flashing...", 0)
+                self.progress_bar.setFormat(self._T.get("progress_preparing", "Preparing..."))
+                self.statusBar.showMessage(self._T.get("status_flashing", "Flashing..."), 0)
 
                 self.log_message(f"Launching FlashWorker: iso={states.iso_path}, target={mount_path}, mode=Windows ISO")
                 self.flash_worker = FlashWorker(states.iso_path, mount_path)
@@ -961,22 +1039,22 @@ class lufus(QMainWindow):
                 self.flash_worker.finished.connect(self.on_flash_finished)
                 self.flash_worker.start()
 
-            elif states.currentflash == 1: # Woe USB
+            elif states.currentflash == 1:
                 if not getattr(states, 'iso_path', '') or not Path(states.iso_path).exists():
                     self.log_message("Start aborted: no valid ISO path set", level="WARN")
-                    QMessageBox.warning(self, "No Image", "Please select a valid installation file first.")
+                    QMessageBox.warning(self, self._T.get("msgbox_no_image_title", "No Image"), self._T.get("msgbox_no_image_body", "Please select an ISO file"))
                     return
                 mount_path = self.get_selected_mount_path()
                 if not mount_path:
                     self.log_message("Start aborted: no USB device selected", level="WARN")
-                    QMessageBox.warning(self, "No Device", "Please select a USB device first.")
+                    QMessageBox.warning(self, self._T.get("msgbox_no_device_title", "No Device"), self._T.get("msgbox_no_device_body", "Please select a USB device"))
                     return
 
                 self.btn_start.setEnabled(False)
                 self.btn_cancel.setEnabled(True)
                 self.progress_bar.setValue(0)
-                self.progress_bar.setFormat("Preparing...")
-                self.statusBar.showMessage("Flashing...", 0)
+                self.progress_bar.setFormat(self._T.get("progress_preparing", "Preparing..."))
+                self.statusBar.showMessage(self._T.get("status_flashing", "Flashing..."), 0)
 
                 self.log_message(f"Launching WoeUSBWorker: iso={states.iso_path}, target={mount_path}")
                 self.flash_worker = WoeUSBWorker(states.iso_path, mount_path)
@@ -987,24 +1065,24 @@ class lufus(QMainWindow):
                 self.flash_worker.finished.connect(self.on_flash_finished)
                 self.flash_worker.start()
 
-        elif states.image_option == 1: # LINUX
-            if states.currentflash == 0: # DD METHOD
+        elif states.image_option == 1:
+            if states.currentflash == 0:
                 if not getattr(states, 'iso_path', '') or not Path(states.iso_path).exists():
                     self.log_message("Start aborted: no valid ISO path set", level="WARN")
-                    QMessageBox.warning(self, "No Image", "Please select a valid installation file first.")
+                    QMessageBox.warning(self, self._T.get("msgbox_no_image_title", "No Image"), self._T.get("msgbox_no_image_body", "Please select an ISO file"))
                     return
                 device_node = self.get_selected_mount_path()
                 if not device_node:
                     self.log_message("Start aborted: no USB device selected", level="WARN")
-                    QMessageBox.warning(self, "No Device", "Please select a USB device first.")
+                    QMessageBox.warning(self, self._T.get("msgbox_no_device_title", "No Device"), self._T.get("msgbox_no_device_body", "Please select a USB device"))
                     return
-                
+
                 self.btn_start.setEnabled(False)
                 self.btn_cancel.setEnabled(True)
                 self.progress_bar.setValue(0)
-                self.progress_bar.setFormat("Preparing...")
-                self.statusBar.showMessage("Flashing...", 0)
-                
+                self.progress_bar.setFormat(self._T.get("progress_preparing", "Preparing..."))
+                self.statusBar.showMessage(self._T.get("status_flashing", "Flashing..."), 0)
+
                 self.log_message(f"Launching FlashWorker: iso={states.iso_path}, target={device_node}, mode=Linux dd")
                 self.flash_worker = FlashWorker(states.iso_path, device_node)
                 self.flash_worker.progress.connect(lambda msg: self.statusBar.showMessage(msg, 0))
@@ -1013,34 +1091,26 @@ class lufus(QMainWindow):
                 self.flash_worker.progress_value.connect(lambda v: self.progress_bar.setFormat(f"{v}%"))
                 self.flash_worker.finished.connect(self.on_flash_finished)
                 self.flash_worker.start()
-            else: # OTHER METHODS NOT YET DONE
-                pass 
-        elif states.image_option == 2: # ONLY FORMATTING
-        ### FORMATTING
+            else:
+                pass
+        elif states.image_option == 2:
             self.btn_start.setEnabled(False)
             self.btn_cancel.setEnabled(True)
             self.progress_bar.setValue(10)
-            self.progress_bar.setFormat("Starting.. 10%")
-            # unmount
+            self.progress_bar.setFormat(self._T.get("progress_starting", "Starting..."))
             fo.unmount()
             self.progress_bar.setValue(30)
-            self.progress_bar.setFormat("Unmounted Drive.. 20%")
-            # we must either flash iso or format the drive
-            # logic will be implemented later
-            # dd flashing goes here
+            self.progress_bar.setFormat(self._T.get("progress_unmounted", "Unmounted"))
 
-            # format the drive
             fo.dskformat()
             self.progress_bar.setValue(60)
-            self.progress_bar.setFormat("Format Drive.. 60%")
-            # change label
+            self.progress_bar.setFormat(self._T.get("progress_formatted", "Formatted"))
             fo.volumecustomlabel()
             self.progress_bar.setValue(80)
-            self.progress_bar.setFormat("Changed Label.. 80%")
-            # re-mount
+            self.progress_bar.setFormat(self._T.get("progress_label_changed", "Label Changed"))
             fo.remount()
             self.progress_bar.setValue(100)
-            self.progress_bar.setFormat("Mount Done.. Completed! 100%")
+            self.progress_bar.setFormat(self._T.get("progress_mount_done", "Mount Done"))
 
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts"""
@@ -1057,7 +1127,6 @@ class lufus(QMainWindow):
             y = parent_rect.bottom() - self.height() - 20
             self.move(x, y)
         else:
-            # Fallback to screen corner
             screen = QApplication.primaryScreen().geometry()
             x = screen.right() - self.width() - 20
             y = screen.bottom() - self.height() - 20
@@ -1066,8 +1135,7 @@ class lufus(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyle("Fusion") 
-    
+    app.setStyle("Fusion")
     usb_devices = {}
     if len(sys.argv) > 1:
         try:
@@ -1079,7 +1147,7 @@ if __name__ == "__main__":
             usb_devices = {}
     else:
         print("No USB devices data received")
-    
+
     window = lufus(usb_devices)
     window.show()
     sys.exit(app.exec())
