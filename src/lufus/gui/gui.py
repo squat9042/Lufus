@@ -639,8 +639,6 @@ class lufus(QMainWindow):
             }
         """)
         btn.clicked.connect(self.refresh_usb_devices)
-        btn.setAccessibleName(self._T.get("tooltip_refresh", "Refresh USB devices"))
-        btn.setAccessibleDescription(self._T.get("accessibility_btn_refresh", ""))
         return btn
 
     def init_ui(self):
@@ -676,15 +674,13 @@ class lufus(QMainWindow):
         self.lbl_device = QLabel(self._T.get("lbl_device", "Device"))
         self.lbl_device.setStyleSheet("font-weight: normal; font-size: 9pt;")
         self.combo_device = QComboBox()
-        self.combo_device.setAccessibleName(self._T.get("lbl_device", "Device"))
-        self.combo_device.setAccessibleDescription(self._T.get("accessibility_combo_device", ""))
         self._populate_device_combo()
-        btn_refresh = self.create_refresh_button()
+        self.btn_refresh = self.create_refresh_button()
 
         device_row = QHBoxLayout()
         device_row.setSpacing(5)
         device_row.addWidget(self.combo_device, 1)
-        device_row.addWidget(btn_refresh)
+        device_row.addWidget(self.btn_refresh)
 
         device_layout = QVBoxLayout()
         device_layout.setSpacing(FIELD_SPACING)
@@ -700,12 +696,9 @@ class lufus(QMainWindow):
         self.combo_boot.setEditable(True)
         self.combo_boot.lineEdit().setReadOnly(True)
         self.combo_boot.addItem("installationmedia.iso")
-        self.combo_boot.setAccessibleName(self._T.get("lbl_boot_selection", "Boot Selection"))
-        self.combo_boot.setAccessibleDescription(self._T.get("accessibility_combo_boot", ""))
 
         self.btn_select = QPushButton(self._T.get("btn_select", "Select"))
         self.btn_select.clicked.connect(self.browse_file)
-        self.btn_select.setAccessibleDescription(self._T.get("accessibility_btn_select", ""))
 
         boot_row = QHBoxLayout()
         boot_row.setSpacing(5)
@@ -729,8 +722,6 @@ class lufus(QMainWindow):
             self._T.get("combo_image_format", "Format Only")
         )
         self.combo_image_option.currentTextChanged.connect(self.update_image_option)
-        self.combo_image_option.setAccessibleName(self._T.get("lbl_image_option", "Image Option"))
-        self.combo_image_option.setAccessibleDescription(self._T.get("accessibility_combo_image_option", ""))
 
         image_layout = QVBoxLayout()
         image_layout.setSpacing(FIELD_SPACING)
@@ -745,8 +736,6 @@ class lufus(QMainWindow):
         self.combo_partition.addItem(self._T.get("combo_partition_gpt", "GPT"))
         self.combo_partition.addItem(self._T.get("combo_partition_mbr", "MBR"))
         self.combo_partition.currentTextChanged.connect(self.update_partition_scheme)
-        self.combo_partition.setAccessibleName(self._T.get("lbl_partition_scheme", "Partition Scheme"))
-        self.combo_partition.setAccessibleDescription(self._T.get("accessibility_combo_partition", ""))
 
         self.lbl_target = QLabel(self._T.get("lbl_target_system", "Target System"))
         self.lbl_target.setStyleSheet("font-weight: normal; font-size: 9pt;")
@@ -754,8 +743,6 @@ class lufus(QMainWindow):
         self.combo_target.addItem(self._T.get("combo_target_uefi", "UEFI"))
         self.combo_target.addItem(self._T.get("combo_target_bios", "BIOS"))
         self.combo_target.currentTextChanged.connect(self.update_target_system)
-        self.combo_target.setAccessibleName(self._T.get("lbl_target_system", "Target System"))
-        self.combo_target.setAccessibleDescription(self._T.get("accessibility_combo_target", ""))
 
         grid_part = QGridLayout()
         grid_part.setHorizontalSpacing(10)
@@ -779,8 +766,6 @@ class lufus(QMainWindow):
         self.lbl_vol.setStyleSheet("font-weight: normal; font-size: 9pt;")
         self.input_label = QLineEdit(self._T.get("lbl_volume_label", "Volume Label"))
         self.input_label.textChanged.connect(self.update_new_label)
-        self.input_label.setAccessibleName(self._T.get("lbl_volume_label", "Volume Label"))
-        self.input_label.setAccessibleDescription(self._T.get("accessibility_input_label", ""))
 
         vol_layout = QVBoxLayout()
         vol_layout.setSpacing(FIELD_SPACING)
@@ -796,8 +781,6 @@ class lufus(QMainWindow):
         # Initially only show Windows-compatible options as app defaults to Windows mode
         self.combo_fs.addItems(["NTFS", "FAT32", "exFAT"])
         self.combo_fs.currentTextChanged.connect(self.updateFS)
-        self.combo_fs.setAccessibleName(self._T.get("lbl_file_system", "File System"))
-        self.combo_fs.setAccessibleDescription(self._T.get("accessibility_combo_fs", ""))
 
         self.lbl_cluster = QLabel(self._T.get("lbl_cluster_size", "Cluster Size"))
         self.lbl_cluster.setStyleSheet("font-weight: normal; font-size: 9pt;")
@@ -805,8 +788,6 @@ class lufus(QMainWindow):
         self.combo_cluster.addItem(self._T.get("combo_cluster_4096", "4096"))
         self.combo_cluster.addItem(self._T.get("combo_cluster_8192", "8192"))
         self.combo_cluster.currentTextChanged.connect(self.update_cluster_size)
-        self.combo_cluster.setAccessibleName(self._T.get("lbl_cluster_size", "Cluster Size"))
-        self.combo_cluster.setAccessibleDescription(self._T.get("accessibility_combo_cluster", ""))
 
         self.lbl_flash = QLabel(self._T.get("lbl_flash_option", "Flash Option"))
         self.lbl_flash.setStyleSheet("font-weight: normal; font-size: 9pt;")
@@ -819,8 +800,6 @@ class lufus(QMainWindow):
         ]
         self.combo_flash.addItems(self.all_flash_options)
         self.combo_flash.currentTextChanged.connect(self.updateflash)
-        self.combo_flash.setAccessibleName(self._T.get("lbl_flash_option", "Flash Option"))
-        self.combo_flash.setAccessibleDescription(self._T.get("accessibility_combo_flash", ""))
 
         grid_fmt = QGridLayout()
         grid_fmt.setHorizontalSpacing(10)
@@ -840,14 +819,12 @@ class lufus(QMainWindow):
         self.chk_quick = QCheckBox(self._T.get("chk_quick_format", "Quick Format"))
         self.chk_quick.setChecked(True)
         self.chk_quick.stateChanged.connect(self.update_QF)
-        self.chk_quick.setAccessibleDescription(self._T.get("accessibility_chk_quick", ""))
 
         self.chk_extended = QCheckBox(
             self._T.get("chk_extended_label", "Create Extended Label")
         )
         self.chk_extended.setChecked(True)
         self.chk_extended.stateChanged.connect(self.update_create_extended)
-        self.chk_extended.setAccessibleDescription(self._T.get("accessibility_chk_extended", ""))
 
         self.chk_badblocks = QCheckBox(
             self._T.get("chk_bad_blocks", "Check for Bad Blocks")
@@ -857,7 +834,6 @@ class lufus(QMainWindow):
         self.combo_badblocks.setFixedWidth(100)
         self.combo_badblocks.setEnabled(False)
         self.chk_badblocks.stateChanged.connect(self.update_check_bad)
-        self.chk_badblocks.setAccessibleDescription(self._T.get("accessibility_chk_badblocks", ""))
 
         bad_blocks_row = QHBoxLayout()
         bad_blocks_row.setSpacing(6)
@@ -867,13 +843,10 @@ class lufus(QMainWindow):
 
         self.chk_verify = QCheckBox(self._T.get("chk_verify_hash", "Verify SHA256 Checksum"))
         self.chk_verify.stateChanged.connect(self.update_verify_hash)
-        self.chk_verify.setAccessibleDescription(self._T.get("accessibility_chk_verify", ""))
         self.input_hash = QLineEdit()
         self.input_hash.setPlaceholderText("Enter expected SHA256 hash here...")
         self.input_hash.setEnabled(False)
         self.input_hash.textChanged.connect(self.update_expected_hash)
-        self.input_hash.setAccessibleName(self._T.get("lbl_expected_hash", "Expected SHA256"))
-        self.input_hash.setAccessibleDescription(self._T.get("accessibility_input_hash", ""))
 
         chk_layout = QVBoxLayout()
         chk_layout.setSpacing(6)
@@ -896,60 +869,48 @@ class lufus(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("")
-        self.progress_bar.setAccessibleName(self._T.get("header_status", "Status"))
-        self.progress_bar.setAccessibleDescription(self._T.get("accessibility_progress_bar", ""))
         main_layout.addWidget(self.progress_bar)
 
         main_layout.addSpacing(10)
 
-        btn_icon1 = QToolButton()
-        btn_icon1.setText("🌐")
-        btn_icon1.setToolTip(self._T.get("tooltip_download", "Download"))
-        btn_icon1.clicked.connect(
+        self.btn_icon1 = QToolButton()
+        self.btn_icon1.setText("🌐")
+        self.btn_icon1.setToolTip(self._T.get("tooltip_download", "Download"))
+        self.btn_icon1.clicked.connect(
             lambda: webbrowser.open("http://www.github.com/hog185/lufus")
         )
-        btn_icon1.setAccessibleName(self._T.get("tooltip_download", "Download updates"))
-        btn_icon1.setAccessibleDescription(self._T.get("accessibility_btn_website", ""))
 
-        btn_icon2 = QToolButton()
-        btn_icon2.setText("ℹ")
-        btn_icon2.setToolTip(self._T.get("tooltip_about", "About"))
-        btn_icon2.clicked.connect(self.show_about)
-        btn_icon2.setAccessibleName(self._T.get("tooltip_about", "About"))
-        btn_icon2.setAccessibleDescription(self._T.get("accessibility_btn_about", ""))
+        self.btn_icon2 = QToolButton()
+        self.btn_icon2.setText("ℹ")
+        self.btn_icon2.setToolTip(self._T.get("tooltip_about", "About"))
+        self.btn_icon2.clicked.connect(self.show_about)
 
-        btn_icon3 = QToolButton()
-        btn_icon3.setText("⚙")
-        btn_icon3.setToolTip(self._T.get("tooltip_settings", "Settings"))
-        btn_icon3.clicked.connect(self.show_settings)
-        btn_icon3.setAccessibleName(self._T.get("tooltip_settings", "Settings"))
-        btn_icon3.setAccessibleDescription(self._T.get("accessibility_btn_settings", ""))
+        self.btn_icon3 = QToolButton()
+        self.btn_icon3.setText("⚙")
+        self.btn_icon3.setToolTip(self._T.get("tooltip_settings", "Settings"))
+        self.btn_icon3.clicked.connect(self.show_settings)
 
-        btn_icon4 = QToolButton()
-        btn_icon4.setText("📄")
-        btn_icon4.setToolTip(self._T.get("tooltip_log", "Log"))
-        btn_icon4.clicked.connect(self.show_log)
-        btn_icon4.setAccessibleName(self._T.get("tooltip_log", "Log"))
-        btn_icon4.setAccessibleDescription(self._T.get("accessibility_btn_log", ""))
+        self.btn_icon4 = QToolButton()
+        self.btn_icon4.setText("📄")
+        self.btn_icon4.setToolTip(self._T.get("tooltip_log", "Log"))
+        self.btn_icon4.clicked.connect(self.show_log)
 
         icons_layout = QHBoxLayout()
         icons_layout.setSpacing(5)
-        icons_layout.addWidget(btn_icon1)
-        icons_layout.addWidget(btn_icon2)
-        icons_layout.addWidget(btn_icon3)
-        icons_layout.addWidget(btn_icon4)
+        icons_layout.addWidget(self.btn_icon1)
+        icons_layout.addWidget(self.btn_icon2)
+        icons_layout.addWidget(self.btn_icon3)
+        icons_layout.addWidget(self.btn_icon4)
         icons_layout.addStretch()
 
         self.btn_start = QPushButton(self._T.get("btn_start", "Start"))
         self.btn_start.setObjectName("btnStart")
         self.btn_start.setMinimumHeight(40)
         self.btn_start.clicked.connect(self.start_process)
-        self.btn_start.setAccessibleDescription(self._T.get("accessibility_btn_start", ""))
 
         self.btn_cancel = QPushButton(self._T.get("btn_cancel", "Cancel"))
         self.btn_cancel.setMinimumHeight(40)
         self.btn_cancel.clicked.connect(self.cancel_process)
-        self.btn_cancel.setAccessibleDescription(self._T.get("accessibility_btn_cancel", ""))
 
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
@@ -968,6 +929,8 @@ class lufus(QMainWindow):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.statusBar.showMessage(self._T.get("status_ready", "Ready"), 0)
+
+        self._update_accessible_metadata()
 
     def _populate_device_combo(self):
         """Populate the device combo box with USB devices"""
@@ -1321,8 +1284,9 @@ class lufus(QMainWindow):
             )
 
         self._update_flashing_options()
+        self._update_accessible_metadata()
 
-        # Refresh accessible descriptions after language change
+    def _update_accessible_metadata(self):
         self.combo_device.setAccessibleName(self._T.get("lbl_device", "Device"))
         self.combo_device.setAccessibleDescription(self._T.get("accessibility_combo_device", ""))
         self.combo_boot.setAccessibleName(self._T.get("lbl_boot_selection", "Boot Selection"))
@@ -1352,6 +1316,16 @@ class lufus(QMainWindow):
         self.progress_bar.setAccessibleDescription(self._T.get("accessibility_progress_bar", ""))
         self.btn_start.setAccessibleDescription(self._T.get("accessibility_btn_start", ""))
         self.btn_cancel.setAccessibleDescription(self._T.get("accessibility_btn_cancel", ""))
+        self.btn_refresh.setAccessibleName(self._T.get("tooltip_refresh", "Refresh USB devices"))
+        self.btn_refresh.setAccessibleDescription(self._T.get("accessibility_btn_refresh", ""))
+        self.btn_icon1.setAccessibleName(self._T.get("tooltip_download", "Download updates"))
+        self.btn_icon1.setAccessibleDescription(self._T.get("accessibility_btn_website", ""))
+        self.btn_icon2.setAccessibleName(self._T.get("tooltip_about", "About"))
+        self.btn_icon2.setAccessibleDescription(self._T.get("accessibility_btn_about", ""))
+        self.btn_icon3.setAccessibleName(self._T.get("tooltip_settings", "Settings"))
+        self.btn_icon3.setAccessibleDescription(self._T.get("accessibility_btn_settings", ""))
+        self.btn_icon4.setAccessibleName(self._T.get("tooltip_log", "Log"))
+        self.btn_icon4.setAccessibleDescription(self._T.get("accessibility_btn_log", ""))
 
     def get_selected_mount_path(self) -> str:
         text = self.combo_device.currentText()
